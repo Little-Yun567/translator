@@ -1,42 +1,91 @@
+
 import streamlit as st
 from googletrans import Translator
-import pyperclip
+from gtts import gTTS
+import base64
+import io
 
-st.set_page_config(page_title="🌸 翻譯小助手", page_icon="🌍")
-st.title("🌸 我的翻譯小助手")
-st.markdown("讓你隨時隨地 ✨ 快速翻譯 · 可愛又實用！")
+st.set_page_config(page_title="翻譯小助手 2.0", page_icon="🌸", layout="centered")
 
+# ---------------- UI 樣式設定 ----------------
+st.markdown("""
+    <style>
+    html, body {
+        background-color: #fffaf3;
+    }
+    .title {
+        font-size: 2.2em;
+        color: #ff928b;
+        text-align: center;
+        margin-bottom: 0.5em;
+    }
+    .subtitle {
+        font-size: 1em;
+        color: #888888;
+        text-align: center;
+        margin-bottom: 2em;
+    }
+    .stTextArea textarea {
+        background-color: #fff;
+        border: 2px solid #ffcab4;
+        border-radius: 1rem;
+        padding: 1em;
+    }
+    .stButton button {
+        border-radius: 1.5rem;
+        background-color: #ffcab4;
+        border: none;
+        padding: 0.6em 1.5em;
+        color: #fff;
+        font-weight: bold;
+    }
+    .stButton button:hover {
+        background-color: #ffa58d;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ---------------- 翻譯邏輯 ----------------
 translator = Translator()
+if "history" not in st.session_state:
+    st.session_state["history"] = []
 
-lang_dict = {
-    "中文（繁體）": "zh-TW",
-    "英文": "en",
-    "日文": "ja",
-    "韓文": "ko",
-    "法文": "fr",
-    "德文": "de",
-    "自動偵測": "auto"
-}
+st.markdown('<div class="title">🌸 翻譯小助手 2.0</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">可愛・實用・支援語音的翻譯 App！</div>', unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
-with col1:
-    from_lang = st.selectbox("💬 輸入語言", list(lang_dict.keys()), index=6)
-with col2:
-    to_lang = st.selectbox("🌍 翻譯成", list(lang_dict.keys()), index=1)
+text = st.text_area("輸入文字", height=150, key="input_text")
+target_lang = st.selectbox("選擇翻譯語言", ["英文", "中文"], index=0)
+lang_code = "en" if target_lang == "英文" else "zh-tw"
 
-text = st.text_area("✍️ 請輸入你想翻譯的文字")
+translated_text = ""
+if text:
+    translated = translator.translate(text, dest=lang_code)
+    translated_text = translated.text
 
-if st.button("🚀 翻譯！"):
-    if text.strip() == "":
-        st.warning("請輸入文字喔！")
-    else:
-        from_code = lang_dict[from_lang]
-        to_code = lang_dict[to_lang]
-        result = translator.translate(text, src=from_code, dest=to_code)
-        st.success("✅ 翻譯完成！")
-        st.markdown("**📘 翻譯結果：**")
-        st.code(result.text, language="")
+    st.markdown("#### 🎯 翻譯結果")
+    st.success(translated_text)
 
-        if st.button("📋 複製翻譯內容"):
-            pyperclip.copy(result.text)
-            st.toast("已複製到剪貼簿！", icon="✅")
+    # 加入翻譯紀錄
+    st.session_state["history"].insert(0, (text, translated_text))
+    st.session_state["history"] = st.session_state["history"][:5]  # 保留前 5 筆
+
+    # 一鍵複製功能
+    st.code(translated_text, language="")
+    st.download_button("📋 複製翻譯結果", translated_text, file_name="translation.txt")
+
+    # 語音播放功能
+    with st.spinner("🔊 產生語音中..."):
+        tts = gTTS(translated_text, lang="en" if lang_code == "en" else "zh-tw")
+        buf = io.BytesIO()
+        tts.write_to_fp(buf)
+        buf.seek(0)
+        audio_bytes = buf.read()
+        b64 = base64.b64encode(audio_bytes).decode()
+        audio_html = f'<audio autoplay controls src="data:audio/mp3;base64,{b64}"></audio>'
+        st.markdown(audio_html, unsafe_allow_html=True)
+
+# 顯示翻譯紀錄
+if st.session_state["history"]:
+    st.markdown("#### 📝 最近翻譯紀錄")
+    for i, (original, result) in enumerate(st.session_state["history"], 1):
+        st.markdown(f"**{i}.** {original} → _{result}_")
